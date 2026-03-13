@@ -12,8 +12,11 @@ sedes <- c("Actopan","Huejutla","Huichapan","Ixmiquilpan","Ixtlahuaco","Metztitl
            "Pachuca UAEH","Pachuca CECYTEH","Pisaflores","Sahagun","Tizayuca",
            "Tlanchinol","Tula","Tulancingo","Zimapan")
 
+claves_sede <- c(55,54,26,94,71,92,37,87,85,51,64,73,82,17,93,67)
 
 #Convertir a csv las listas de registro de escuela
+
+codes <- setNames(10:99,LETTERS)
 
 input_escuelas<-"../listas_crudas/Registro_escuelas"
 output_escuelas<-"../listas_crudas/csv_escuelas"
@@ -21,7 +24,7 @@ output_escuelas<-"../listas_crudas/csv_escuelas"
 temp<-list.files(input_escuelas,pattern="\\.xlsx$",full.names = TRUE)
 
 for (f in temp){
-  df<-read_excel(f,sheet = 1, skip =2)
+  df<-read_excel(f,sheet = 1, skip =2)[ ,1:9]
   names(df) <- gsub("\\s+", "_", names(df))
   out_name<-paste0(file_path_sans_ext(basename(f)),".csv")
   out_path<-file.path(output_escuelas,out_name)
@@ -76,6 +79,10 @@ for (temp in sedes){
     escuela_por_sede[[temp]]$Equipo<-escuela_por_sede[[temp]]$Escuela
     escuela_por_sede[[temp]]$Sede<-temp
     basica_sede[[temp]] <- bind_rows(escuela_por_sede[[temp]],indeps_por_sede[[temp]])
+    print(c(temp,ncol(basica_sede[[temp]]),"variables"))
+    basica_sede[[temp]]$Nombre<-arregla_nombre(basica_sede[[temp]]$Nombre)
+    basica_sede[[temp]]$Primer_apellido<-arregla_nombre(basica_sede[[temp]]$Primer_apellido)
+    basica_sede[[temp]]$Segundo_apellido<-arregla_nombre(basica_sede[[temp]]$Segundo_apellido)
   }
   else{
     escuela_por_sede[[temp]]<-data.frame()
@@ -83,9 +90,102 @@ for (temp in sedes){
   }
 }
 
+# generar las claves de los participantes y agregarlas a las listas basica_sede 
+
+
+for (i in 1:length(sedes)){
+  if (nrow(basica_sede[[i]])>0){
+      clave<-claves_sede[i]
+      print(sedes[i])
+      basica_sede[[i]]$clave<-""
+      for (j in 1:nrow(basica_sede[[i]])){
+          Curp<-basica_sede[[i]]$CURP[j]
+          basica_sede[[i]]$clave[j]<-paste0(clave,letranumero(substr(Curp,4,4)),
+                                            substr(Curp,5,10))  
+      }
+  }
+}
+
+
+temp<-lista_general_registro$clave
+borrados<-0
+while (anyDuplicated(temp)>0){
+      pivote<-anyDuplicated(temp)
+      print(c("repetido encontrado en", pivote+borrados,"clave",temp[pivote]))
+      if (temp[pivote]%in%temp[1:(pivote-1)]){
+          temp<-temp[-pivote]
+          borrados<-borrados+1
+          lista_general_registro$CURP[1:(pivote-1)]
+      }
+      else{ 
+          temp[pivote]<-remplazar(temp[pivote],4)
+          lista_general_registro$clave[pivote+borrados]<-temp[pivote]
+      }
+}
+
+
+
+x<-which(sapply(basica_sede,nrow)>0)
+sede_novacia<-sedes[x]
+
+
+#general la lista general con todos juntos a partir de las listas basica_sede, exportarla
+
 lista_general_registro <- juntar_bases(basica_sede)
 
 write.csv(lista_general_registro,
           "../listas_generadas/lista_general_registro.csv",row.names = FALSE)
 
-rm(df,f,out_name,out_path,temp,x,y)
+
+
+# hacer las listas de asistencia desde las listas basicas, exportar ambas por sede en csv
+
+
+asistencia<-list()
+
+for (i in sede_novacia){
+    print(c('asistencia',i))
+    asistencia[[i]] <-select (basica_sede[[i]], clave,Nombre, Primer_apellido, Segundo_apellido,
+                               Equipo,Sede)
+    orden<-1:nrow(asistencia[[i]])
+    asistencia[[i]]<-cbind(orden,asistencia[[i]])
+}
+
+print("listas de asistencia generadas para las no vacias")
+
+#exportar listas basicas y de asistencia por sede a los csv
+
+for (sede in sede_novacia){
+    print(c("exportar listas de",sede))
+    path1 <- file.path("../listas_generadas/basicas_por_sede/",
+                       paste0(sede,"_basica.csv",sep=""))
+    path2 <- file.path("../listas_generadas/listas_de_asistencia/",
+                       paste0(sede,"_asistencia.csv",sep=""))
+    print(dim(basica_sede[[sede]]))
+    write.csv(basica_sede[[sede]],file = path1,row.names = FALSE)
+    write.csv(asistencia[[sede]],file = path2,row.names = FALSE)
+}
+
+resumen <- tibble(
+  sede = names(basica_sede),
+  alumnos = sapply(basica_sede, nrow)
+)
+
+
+write.csv(resumen,"../listas_generadas/participacion_sedes.csv",row.names = FALSE)
+
+#-----------extraer lista de correos y mandarla a un csv
+
+correos<-select(lista_general_registro,Correo)%>%
+         unique()
+correosesc<-select(lista_general_registro,Correo_escuela)%>%
+    unique()
+names(correosesc)<-"Correo"
+correos<-rbind(correos,correosesc)
+
+write.csv(x = correos,"../listas_generadas/correos.csv",row.names = FALSE)
+
+rm(correos,correosesc)
+#--------------------------------
+
+rm(clave,codes,cols,Curp,df,f,i,j,orden,out_name,out_path,path,path1,path2,pivote,sede,temp,x,y)
