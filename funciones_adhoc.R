@@ -41,6 +41,44 @@ arregla_nombre <- function(x){
   x
 }
 
+capturar_respuesta <- function(sede){
+  temp <- gsub(" ","",sede)
+  path <- paste0("../listas_crudas/respuestas_examen/", temp, "2026.csv")
+  print(sede)
+  
+  if (file.exists(path)) {
+    # Intenta leer y seleccionar columnas
+    print(c("Leyendo:", sede))
+    tryCatch({
+      df <- read.csv(path,fileEncoding = "latin3")
+      
+      # Verifica que estén todas las columnas necesarias
+      names(df)[1] <-"clave"
+      df$clave<-as.character(df$clave)
+      columnas_faltantes <- setdiff(vars, names(df))
+      if (length(columnas_faltantes) > 0) {
+        warning(paste("Faltan columnas en", sede, ":", paste(columnas_faltantes, collapse = ", ")))
+      }
+      
+      df <- df %>% select(any_of(vars)) %>% unique()
+      df$sede <- sede
+      
+    }, error = function(e) {
+      warning(paste("Error al leer el archivo de la sede", sede, ":", e$message))
+    })
+  } 
+  else {
+    print(paste("Archivo no encontrado para la sede:", sede))
+  }
+  return(df)
+}
+
+
+chequeo <- function(clave,lista=lista_general_puntuaciones){
+      x<-which(lista$clave==clave)
+      print(select(lista[x, ],Nombre,Puntos,sede))
+}
+
 
 #encontrar los alumnos de una clave de escuela en la lista de puntos
 
@@ -56,14 +94,29 @@ detective <- function(m){
 juntar_bases<-function(lista_bases){
   juntos <- as.data.frame(matrix(nrow=0,ncol = 0))
   for (base in names(lista_bases)){
-    if (nrow(lista_bases[[base]]>0)){
-      print(c("juntando base",base))
-      juntos <- bind_rows(juntos,lista_bases[[base]])  
-    }
-    print(c("dimension de bases juntas",dim(juntos)))
+      if (nrow(lista_bases[[base]]>0)){
+          print(c("juntando base",base))
+          print(dim(lista_bases[[base]]))
+          juntos <- bind_rows(juntos,lista_bases[[base]])  
+      }
+      print(c("dimension de bases juntas",dim(juntos)))
   }
   return(juntos)
 }
+
+
+letranumero<- function(texto,codigo){
+  paste0(sapply(strsplit(toupper(texto), "")[[1]], function(x) codes[x]),collapse="")
+}
+
+
+#letter_code <- function() {   #para generar clave numerica a partir de curp
+#  nums <- 10:35
+#  setNames(nums, LETTERS)
+#}
+
+#codes <- letter_code()
+
 
 
 #reportar resultados de uno o varios alumnos
@@ -172,6 +225,12 @@ subte <- function(x){
   x<-toTitleCase(tolower(x))
   x<-gsub("cndaria", "cundaria",x,ignore.case = TRUE)
   x<-gsub("Escuela Preparatoria", "Preparatoria",x,ignore.case = TRUE)
+  x<-gsub("Escuela Secundaria", "Secundaria",x,ignore.case = TRUE)
+  x<-gsub("Particular", "",x,ignore.case = TRUE)
+  x<-gsub("Incorporada", "",x,ignore.case = TRUE)
+  x<-gsub("Prepatec", "Prepa Tec",x,ignore.case = TRUE)
+  x<-gsub("Federal por cooperacion", "",x,ignore.case = TRUE)
+  x<-gsub("Federal por cooperación", "",x,ignore.case = TRUE)
   x<-gsub("COBAEH CEMSAD","CEMSAD",x,ignore.case = TRUE)
   x<-gsub("CECYTE HIDALGO,","CECYTEH",x,ignore.case = TRUE)
   x<-gsub("CECYTE HIDALGO","CECYTEH",x,ignore.case = TRUE)
@@ -279,5 +338,30 @@ remplazo_clave<-function(lista){
 }  
 
 
+remplazar <- function(x,n) {
+  d <- as.integer(substr(x, n, n))
+  newd <- (d + 1) %% 10
+  paste0(substr(x, 1, n-1), newd, substr(x, n+1, nchar(x)))
+}
 
 
+borrar_duplicados <- function(df, quitar = "Participante Independiente") {
+  
+  a_borrar <- sapply(seq_len(nrow(df)), function(i) {
+    curp <- df$CURP[i]
+    df$EQUIPO[i] == quitar &&
+      any(df$CURP == curp & df$EQUIPO != quitar)
+  })
+  
+  reg_eliminados <- df[a_borrar, ]
+  
+  cat("Registros eliminados:\n")
+  print(reg_eliminados)
+  
+  df_limpio <- df[!a_borrar, ]
+  
+  return(list(
+    base_limpia = df_limpio,
+    eliminados = reg_eliminados
+  ))
+}

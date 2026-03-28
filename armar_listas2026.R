@@ -12,6 +12,7 @@ sedes <- c("Actopan","Huejutla","Huichapan","Ixmiquilpan","Ixtlahuaco","Metztitl
            "Pachuca UAEH","Pachuca CECYTEH","Pisaflores","Sahagun","Tizayuca",
            "Tlanchinol","Tula","Tulancingo","Zimapan")
 
+
 claves_sede <- c(55,54,26,94,71,92,37,87,85,51,64,73,82,17,93,67)
 
 #Convertir a csv las listas de registro de escuela
@@ -133,6 +134,7 @@ sede_novacia<-sedes[x]
 
 lista_general_registro <- juntar_bases(basica_sede)
 
+
 write.csv(lista_general_registro,
           "../listas_generadas/lista_general_registro.csv",row.names = FALSE)
 
@@ -141,17 +143,24 @@ write.csv(lista_general_registro,
 # hacer las listas de asistencia desde las listas basicas, exportar ambas por sede en csv
 
 
+indeps_repetidos<-list()
 asistencia<-list()
 
 for (i in sede_novacia){
-    print(c('asistencia',i))
-    asistencia[[i]] <-select (basica_sede[[i]], clave,Nombre, Primer_apellido, Segundo_apellido,
-                               Equipo,Sede)
-    orden<-1:nrow(asistencia[[i]])
-    asistencia[[i]]<-cbind(orden,asistencia[[i]])
+  
+  print(c("asistencia", i))
+  
+  asistencia[[i]] <- basica_sede[[i]] %>%
+    select(clave, Nombre, Primer_apellido, Segundo_apellido, Equipo, Sede) %>%
+    arrange(Nombre)
+  
+  asistencia[[i]] <- cbind(orden=1:nrow(asistencia[[i]]),asistencia[[i]])
+  
+  res <- borrar_duplicados(asistencia[[i]])
+  asistencia[[i]] <- res$base_limpia
+  indeps_repetidos[[i]] <- res$eliminados
 }
 
-print("listas de asistencia generadas para las no vacias")
 
 #exportar listas basicas y de asistencia por sede a los csv
 
@@ -188,4 +197,4 @@ write.csv(x = correos,"../listas_generadas/correos.csv",row.names = FALSE)
 rm(correos,correosesc)
 #--------------------------------
 
-rm(clave,codes,cols,Curp,df,f,i,j,orden,out_name,out_path,path,path1,path2,pivote,sede,temp,x,y)
+rm(clave,codes,cols,Curp,df,f,i,j,out_name,out_path,path,path1,path2,pivote,res,sede,temp,x,y)
